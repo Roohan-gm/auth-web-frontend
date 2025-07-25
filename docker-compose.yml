@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${process.env.DATABASE_URL}
+      - NEXTAUTH_URL=${process.env.NEXTAUTH_URL}
+      - GOOGLE_CLIENT_ID=${process.env.GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${process.env.GOOGLE_CLIENT_SECRET}
+      - CLOUDINARY_URL=${process.env.CLOUDINARY_URL}
+      - NEXTAUTH_SECRET=${process.env.NEXTAUTH_SECRET}
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev
+ 
