@@ -2,9 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,30 +10,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, Users, Eye } from "lucide-react";
 import Link from "next/link";
 import { userApi } from "@/lib/api";
-import { AxiosResponse } from "axios";
+import { useAuth } from "@/lib/use-auth";
+import { AuthSpinner } from "@/components/loaders/AuthSpinner";
+import { PaginationInfo, User } from "@/lib/types";
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  age: number;
-  gender: string;
-  profilePicture: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
-interface PaginationInfo {
-  currentPage: number;
-  totalPages: number;
-  totalUsers: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-}
 
 export default function UsersPage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const { user, loading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,17 +28,14 @@ export default function UsersPage() {
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response: AxiosResponse = await userApi.getAllUsers({
+      const response = await userApi.getAllUsers({
         page: currentPage,
         limit: 12,
         sort: "createdAt",
         order: "desc",
       });
-      // defensive fallback
-      const data = response.data ?? {};
-      console.log("Data:", data);
-      setUsers(data.users ?? []);
-      setPagination((data.pagination as PaginationInfo) ?? null);
+      setUsers(response.users ?? []);
+      setPagination((response.pagination as PaginationInfo) ?? null);
     } catch (error) {
       console.error("Failed to load users:", error);
       setUsers([]);
@@ -67,12 +46,12 @@ export default function UsersPage() {
   }, [currentPage]);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    } else if (status === "authenticated") {
+    if (!loading && user) {
       loadUsers();
     }
-  }, [status, currentPage, router, loadUsers]);
+  }, [loading, user, loadUsers]);
+
+  if (loading) return <AuthSpinner />;
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,13 +63,12 @@ export default function UsersPage() {
 
     setIsSearching(true);
     try {
-      const response: AxiosResponse = await userApi.searchUsers(searchTerm, {
+      const response = await userApi.searchUsers(searchTerm, {
         page: 1,
         limit: 12,
       });
-      const data = response.data ?? {};
-      setUsers(data.users ?? []);
-      setPagination((data.pagination as PaginationInfo) ?? null);
+      setUsers(response.users ?? []);
+      setPagination((response.pagination as PaginationInfo) ?? null);
       setCurrentPage(1);
     } catch (error) {
       console.error("Search failed:", error);
@@ -107,19 +85,7 @@ export default function UsersPage() {
     loadUsers();
   };
 
-  if (status === "loading" || isLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <div className="container mx-auto py-8">

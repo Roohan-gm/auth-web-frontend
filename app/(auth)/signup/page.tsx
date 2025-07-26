@@ -23,8 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { signIn } from "next-auth/react";
 import Image from "next/image";
+import { authApi, storage } from "@/lib/api";
+import { googleApi } from "@/lib/google-api";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -34,7 +35,9 @@ export default function SignupPage() {
     age: "",
     gender: "",
   });
-  const [profilePictureFile, setProfilePictureFile] = useState<File | null>(null);
+  const [profilePictureFile, setProfilePictureFile] = useState<File | null>(
+    null
+  );
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,26 +49,14 @@ export default function SignupPage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file size and type
-      if (file.size > 5 * 1024 * 1024) {
-        setError("Image size must be less than 5MB");
-        return;
-      }
-      if (!["image/jpeg", "image/png", "image/gif"].includes(file.type)) {
-        setError("Only JPEG, PNG, or GIF images are allowed");
-        return;
-      }
-      setProfilePictureFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setProfilePictureFile(null);
-      setPreviewUrl(null);
-    }
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return setError("Max 5 MB");
+    if (!["image/jpeg", "image/png", "image/gif"].includes(file.type))
+      return setError("Only JPEG / PNG / GIF");
+    setProfilePictureFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPreviewUrl(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,66 +67,39 @@ export default function SignupPage() {
     try {
       let profilePictureUrl = "";
       if (profilePictureFile) {
-        // Upload image to Cloudinary via server-side API
-        const uploadFormData = new FormData();
-        uploadFormData.append("file", profilePictureFile);
-        uploadFormData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "");
-
-        const uploadResponse = await fetch(
-          `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-          {
-            method: "POST",
-            body: uploadFormData,
-          }
+        const form = new FormData();
+        form.append("file", profilePictureFile);
+        form.append(
+          "upload_preset",
+          process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!
         );
 
-        const uploadData = await uploadResponse.json();
-        if (!uploadResponse.ok) {
-          throw new Error(uploadData.error?.message || "Failed to upload image");
-        }
-        profilePictureUrl = uploadData.secure_url;
+        const up = await fetch(
+          `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+          { method: "POST", body: form }
+        );
+
+        if (!up.ok) throw new Error("Upload failed");
+        const upJson = await up.json();
+        profilePictureUrl = upJson.secure_url;
       }
 
-      // Prepare signup data
-      const formDataToSend = new FormData();
-      Object.entries({ ...formData, profilePicture: profilePictureUrl }).forEach(([key, value]) => {
-        if (value) formDataToSend.append(key, value);
+      const { token } = await authApi.signup({
+        ...formData,
+        age: formData.age ? Number(formData.age) : undefined,
+        profilePicture: profilePictureUrl,
       });
 
-      const signupResponse = await fetch("/api/auth/signup", {
-        method: "POST",
-        body: formDataToSend,
-      });
-
-      const signupData = await signupResponse.json();
-
-      if (!signupResponse.ok) {
-        setError(signupData.error || "An error occurred during signup");
-        return;
-      }
-
-      // Auto-login after successful signup
-      const result = await signIn("credentials", {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError("Account created but login failed. Please try logging in.");
-      } else {
-        router.push("/dashboard");
-      }
+      storage.setToken(token);
+      router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred. Please try again.");
+      setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSignIn = () => {
-    signIn("google", { callbackUrl: "/dashboard" });
-  };
+  const handleGoogleSignIn = googleApi;
 
   return (
     <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
@@ -148,8 +112,10 @@ export default function SignupPage() {
             Create your account to get started
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name */}
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
               <Input
@@ -162,6 +128,8 @@ export default function SignupPage() {
                 required
               />
             </div>
+
+            {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -174,6 +142,8 @@ export default function SignupPage() {
                 required
               />
             </div>
+
+            {/* Password */}
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
@@ -183,10 +153,12 @@ export default function SignupPage() {
                 placeholder="Create a strong password"
                 value={formData.password}
                 onChange={handleInputChange}
-                required
                 minLength={6}
+                required
               />
             </div>
+
+            {/* Age & Gender */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="age">Age</Label>
@@ -197,9 +169,9 @@ export default function SignupPage() {
                   placeholder="25"
                   value={formData.age}
                   onChange={handleInputChange}
-                  required
                   min="13"
                   max="120"
+                  required
                 />
               </div>
               <div className="space-y-2">
@@ -224,6 +196,8 @@ export default function SignupPage() {
                 </Select>
               </div>
             </div>
+
+            {/* Profile picture */}
             <div className="space-y-2">
               <Label htmlFor="profilePicture">Profile Picture (Optional)</Label>
               <Input
@@ -231,28 +205,26 @@ export default function SignupPage() {
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
-                className="bg-gray-400 text-white"
               />
               {previewUrl && (
                 <div className="mt-2">
                   <Image
                     src={previewUrl}
-                    alt="Profile picture preview"
+                    alt="Preview"
                     width={80}
                     height={80}
                     className="rounded object-cover mx-auto"
                   />
-                  <p className="text-sm text-green-600 mt-2 text-center">
-                    Image selected for upload
-                  </p>
                 </div>
               )}
             </div>
+
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating account..." : "Create Account"}
             </Button>

@@ -1,18 +1,34 @@
 "use client";
 
-import { useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { authApi, storage } from "@/lib/api";
+
+function useJwtSession() {
+  const [token, setToken] = useState<string | null>(null);
+  const [status, setStatus] = useState<
+    "loading" | "authenticated" | "unauthenticated"
+  >("loading");
+
+  useEffect(() => {
+    setToken(storage.getToken());
+    setStatus(storage.getToken() ? "authenticated" : "unauthenticated");
+  }, []);
+
+  return { token, status };
+}
 
 export default function Header() {
-  const { data: session, status } = useSession();
+  const { status } = useJwtSession();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignOut = async () => {
     setIsLoading(true);
     try {
-      await signOut({ callbackUrl: "/" });
+      await authApi.logout();
+      storage.clearToken();
+      window.location.href = "/";
     } catch (error) {
       console.error("Sign out error:", error);
     } finally {
@@ -26,7 +42,9 @@ export default function Header() {
         {/* Logo/Brand */}
         <Link href="/" className="flex items-center space-x-2">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-lg ">A</span>
+            <span className="text-primary-foreground font-bold text-lg ">
+              A
+            </span>
           </div>
           <span className="font-bold text-xl">AuthWeb</span>
         </Link>
@@ -35,7 +53,7 @@ export default function Header() {
         <div className="hidden sm:flex items-center space-x-4">
           {status === "loading" ? (
             <div className="h-8 w-8 animate-pulse bg-muted rounded-full" />
-          ) : session ? (
+          ) : status === "authenticated" ? (
             <Button onClick={handleSignOut}>
               {isLoading ? "Signing out..." : "Logout"}
             </Button>

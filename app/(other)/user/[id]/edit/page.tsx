@@ -35,16 +35,9 @@ import {
 } from "lucide-react";
 import { userApi } from "@/lib/api";
 import type { AxiosResponse } from "axios";
-
-/* ------------- Shared interface ------------- */
-interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-  age: number;
-  gender: string;
-  profilePicture?: string;
-}
+import { UserProfile } from "@/lib/types";
+import { useAuth } from "@/lib/use-auth";
+import { AuthSpinner } from "@/components/loaders/AuthSpinner";
 
 /* ------------- Zod schema ------------- */
 const schema = z.object({
@@ -65,6 +58,7 @@ export default function EditProfilePage({
 
   const [initial, setInitial] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { user, loading } = useAuth();
 
   const {
     register,
@@ -96,8 +90,8 @@ export default function EditProfilePage({
   }, [id, reset]);
 
   useEffect(() => {
-    if (id) load();
-  }, [id, load]);
+    if (user) load();
+  }, [user, load]);
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -113,14 +107,9 @@ export default function EditProfilePage({
     }
   };
 
-  if (isLoading)
-    return (
-      <div className="container mx-auto h-screen py-8 flex justify-center items-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
+  if (loading || isLoading) return <AuthSpinner />;
 
-  if (!initial) return null;
+  if (!user || !initial) return null;
 
   return (
     <div className="container mx-auto py-8">

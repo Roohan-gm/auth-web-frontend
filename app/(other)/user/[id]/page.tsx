@@ -1,7 +1,5 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import {
   Card,
@@ -13,9 +11,19 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { User, Settings, Calendar, Mail, CalendarClock, VenusAndMars, Users } from "lucide-react";
+import {
+  User,
+  Settings,
+  Calendar,
+  Mail,
+  CalendarClock,
+  VenusAndMars,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { userApi } from "@/lib/api";
+import { useAuth } from "@/lib/use-auth";
+import { AuthSpinner } from "@/components/loaders/AuthSpinner";
 import { AxiosResponse } from "axios";
 
 interface UserProfile {
@@ -37,14 +45,14 @@ export default function ProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const { user, loading } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   const { id } = use(params);
-  const isOwnProfile = session?.user?.id === id;
+
+  const isOwnProfile = user?.id === id;
 
   const loadProfile = useCallback(async () => {
     try {
@@ -58,28 +66,16 @@ export default function ProfilePage({
       setIsLoading(false);
     }
   }, [id]);
+
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    }
-    if (status === "authenticated" && id) {
+    if (user) {
       loadProfile();
     }
-  }, [status, id, router, loadProfile]);
+  }, [user, loadProfile]);
 
-  if (status === "loading" || isLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      </div>
-    );
-  }
+  if (loading || isLoading) return <AuthSpinner />;
 
-  if (!session) {
-    return null;
-  }
+  if (!user) return null;
 
   if (error) {
     return (

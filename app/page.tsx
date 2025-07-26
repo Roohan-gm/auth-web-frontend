@@ -1,6 +1,5 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,10 +10,32 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ArrowRight, Shield, Users, Zap, CheckCircle } from "lucide-react";
+import { getMe, storage } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { HeroSkeleton } from "@/components/loaders/HeroSkeleton";
+import { UserData } from "@/lib/types";
+
+
 
 export default function HomePage() {
-  const { data: session } = useSession();
 
+  const [user, setUser] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!storage.getToken()) {
+      setLoading(false);
+      return;
+    }
+    getMe()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+
+  if (loading) return <HeroSkeleton />;
+  
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
@@ -33,7 +54,7 @@ export default function HomePage() {
               multiple providers and robust user management.
             </p>
 
-            {session ? (
+            {user ? (
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                 <Link href="/dashboard">
                   <Button size="lg" className="w-full sm:w-auto">
@@ -43,7 +64,7 @@ export default function HomePage() {
                 </Link>
                 <p className="text-muted-foreground">
                   Welcome back,{" "}
-                  <span className="font-semibold">{session.user.name}</span>!
+                  <span className="font-semibold">{user.name}</span>!
                 </p>
               </div>
             ) : (
@@ -139,7 +160,7 @@ export default function HomePage() {
                 <ul className="space-y-2">
                   <li className="flex items-center text-sm">
                     <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                    MongoDB indexes
+                    Prisma indexes
                   </li>
                   <li className="flex items-center text-sm">
                     <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
@@ -152,8 +173,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      {!session && (
+      {!user && (
         <section className="py-20">
           <div className="container max-w-4xl mx-auto text-center px-4">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">

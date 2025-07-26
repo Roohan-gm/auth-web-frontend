@@ -2,8 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -22,14 +21,17 @@ import {
   Trash2,
   AlertTriangle,
   User,
+  ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
-import { authApi } from "@/lib/api";
+import { authApi, storage } from "@/lib/api";
 import type { AxiosError } from "axios";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/use-auth";
+import { AuthSpinner } from "@/components/loaders/AuthSpinner";
 
 export default function SettingsPage() {
-  const { data: session, status } = useSession();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -41,21 +43,17 @@ export default function SettingsPage() {
     confirmPassword: "",
   });
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    }
-  }, [status, router]);
-
+  if (loading) return <AuthSpinner />;
+  if (!user) return null;
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert("New passwords don't match");
+      toast("New passwords don't match");
       return;
     }
     if (passwordData.newPassword.length < 6) {
-      alert("Password must be at least 6 characters");
+      toast("Password must be at least 6 characters");
       return;
     }
 
@@ -80,42 +78,30 @@ export default function SettingsPage() {
   };
 
   const handleDeleteAccount = async () => {
-    if (!showDeleteConfirm) {
-      setShowDeleteConfirm(true);
-      return;
-    }
+    if (!showDeleteConfirm) return setShowDeleteConfirm(true);
 
     setIsLoading(true);
     try {
       await authApi.deleteAccount();
-      await signOut({ callbackUrl: "/" });
+      storage.clearToken();
+      router.push("/");
     } catch (err: unknown) {
       const axiosError = err as AxiosError<{ message?: string }>;
-      alert(axiosError.response?.data?.message || "Failed to delete account");
+      toast(axiosError.response?.data?.message || "Failed to delete account");
     } finally {
       setIsLoading(false);
     }
   };
-
-  if (status === "loading") {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return null;
-  }
 
   return (
     <div className="container mx-auto py-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
+          <ArrowLeft
+            className="h-5 w-5 cursor-pointer"
+            onClick={() => router.back()}
+          />
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Settings className="h-8 w-8" />
             Account Settings
@@ -145,7 +131,7 @@ export default function SettingsPage() {
                     Update your name, photo, and other details
                   </p>
                 </div>
-                <Link href={`/user/${session.user.id}/edit`}>
+                <Link href={`/user/${user.id}/edit`}>
                   <Button variant="outline">Edit Profile</Button>
                 </Link>
               </div>

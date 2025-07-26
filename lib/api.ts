@@ -1,115 +1,79 @@
-import axios, { type AxiosError } from "axios"
-import { getSession } from "next-auth/react"
-import { AxiosResponse } from "axios";
+import axios, { AxiosResponse, type AxiosError } from "axios";
+import { LoginData, SignupData, User } from "./types";
 
-interface SignupData {
-  name: string
-  email: string
-  password: string
-  age?: number
-  gender?: string
-}
-
-interface LoginData {
-  email: string
-  password: string
-}
-
-interface UserData {
-  id: string;
-  name: string;
-  email: string;
-  age: number;
-  gender: string;
-  profilePicture?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
+/* ---------- axios instance ---------- */
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_BACKEND_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  headers: { "Content-Type": "application/json" },
   withCredentials: true,
-})
+});
 
-// Add auth token to requests
-api.interceptors.request.use(async (config) => {
-  const session = await getSession()
-  if (session?.user?.accessToken) {
-    config.headers.Authorization = `Bearer ${session?.user?.accessToken}`
-  }
-  return config
-})
+/* ---------- token helpers ---------- */
+export const TOKEN_KEY = "jwt";
+export const storage = {
+  setToken: (t: string) => localStorage.setItem(TOKEN_KEY, t),
+  getToken: () => localStorage.getItem(TOKEN_KEY),
+  clearToken: () => localStorage.removeItem(TOKEN_KEY),
+};
 
-// Handle token refresh on 401
+/* ---------- request / response interceptors ---------- */
+api.interceptors.request.use((config) => {
+  const token = storage.getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
+  (res) => res,
+  (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Token might be expired, redirect to login
-      window.location.href = "/login"
+      storage.clearToken();
+      window.location.href = "/login";
     }
-    return Promise.reject(error)
-  },
-)
+    return Promise.reject(error);
+  }
+);
 
+/* ---------- auth API ---------- */
 export const authApi = {
+  signup: (userData: SignupData) =>
+    api.post<{ user: User; token: string }>("/api/auth/signup", userData).then((r) => r.data),
 
-  signup: async (userData: SignupData): Promise<AxiosResponse<{ user: UserData; accessToken: string }>> => {
-    const response = await api.post("/api/auth/signup", userData)
-    return response.data
-  },
+  login: (credentials: LoginData) =>
+    api.post<{ user: User; token: string }>("/api/auth/login", credentials).then((r) => r.data),
 
-  login: async (credentials: LoginData): Promise<AxiosResponse<{ user: UserData; accessToken: string }>> => {
-    const response = await api.post("/api/auth/login", credentials)
-    return response.data
-  },
+  google: (googleCode: string) =>
+    api.post<{ user: User; token: string }>("/api/auth/google", { token: googleCode }).then((r) => r.data),
 
-  logout: async (): Promise<AxiosResponse> => {
-    const response = await api.post("/api/auth/logout")
-    return response.data
-  },
+  logout: () => api.post("/api/auth/logout").then((r) => r.data),
 
-  changePassword: async (payload: {
-    currentPassword: string;
-    newPassword: string;
-  }) => {
-    const res = await api.put("/api/auth/change-password", payload);
-    return res.data;        
-  },
+  changePassword: (payload: { currentPassword: string; newPassword: string }) =>
+    api.put("/api/auth/change-password", payload).then((r) => r.data),
 
-  deleteAccount: async () => {
-    const res = await api.delete("/api/auth/account");
-    return res.data;           
-  },
-}
+  deleteAccount: () => api.delete("/api/auth/account").then((r) => r.data),
+};
 
+/* ---------- user API ---------- */
 export const userApi = {
+  getProfile: (id: string) => api.get<AxiosResponse>(`/api/user/${id}`).then((r) => r.data),
 
-  getProfile: async (id: string): Promise<AxiosResponse<UserData>> => {
-    return await api.get(`/api/user/${id}`)
-  },
+  updateProfile: (id: string, data: Partial<User>) =>
+    api.put<User>(`/api/user/${id}`, data).then((r) => r.data),
 
-  updateProfile: async (id: string, data: Partial<UserData>): Promise<AxiosResponse<UserData>> => {
-    return await api.put(`/api/user/${id}`, data)
-  },
+  getAllUsers: (params?: Record<string, unknown>) =>
+    api.get<{ users: User[]; pagination: unknown }>("/api/user", { params }).then((r) => r.data),
 
-  getAllUsers: async (
-    params?: Record<string, unknown>,
-  ): Promise<AxiosResponse<{ users: UserData[]; pagination: unknown }>> => {
-    return await api.get("/api/user", { params })
-  },
-
-  searchUsers: async (
-    searchTerm: string,
-    params?: Record<string, unknown>,
-  ): Promise<AxiosResponse<{ users: UserData[]; pagination: unknown }>> => {
-    return await api.get("/api/user/search", {
+  searchUsers: (searchTerm: string, params?: Record<string, unknown>) =>
+    api.get<{ users: User[]; pagination: unknown }>("/api/user/search", {
       params: { q: searchTerm, ...params },
-    })
-  },
-}
+    }).then((r) => r.data),
+};
 
-export default api
+export const getMe = async (): Promise<User | null> => {
+  const token = storage.getToken();
+  if (!token) return null;
+  const res = await api.get<User>("/api/auth/me");
+  return res.data;
+};
+
+export default api;
