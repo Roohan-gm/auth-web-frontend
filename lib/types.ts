@@ -5,6 +5,13 @@ export interface UserData {
   profilePicture?: string;
 }
 
+export type CleanParams = {
+  page?: string | number;
+  limit?: string | number;
+  order?: string;
+  sort?: string;
+};
+
 export interface User {
   id: string;
   name: string;

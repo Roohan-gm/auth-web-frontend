@@ -10,32 +10,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ArrowRight, Shield, Users, Zap, CheckCircle } from "lucide-react";
-import { getMe, storage } from "@/lib/api";
-import { useEffect, useState } from "react";
-import { HeroSkeleton } from "@/components/loaders/HeroSkeleton";
-import { UserData } from "@/lib/types";
-
-
+import { getMe } from "@/lib/api";
+import { useEffect } from "react";
+import { useAuthStore } from "@/lib/authStore";
 
 export default function HomePage() {
-
-  const [user, setUser] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, status } = useAuthStore();
 
   useEffect(() => {
-    if (!storage.getToken()) {
-      setLoading(false);
-      return;
-    }
+  if (status === "authenticated" && !user) {
     getMe()
-      .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
-  }, []);
+      .then((userData) => {
+        useAuthStore.setState({ user: userData });
+      })
+      .catch(() => {
+        useAuthStore.setState({ user: null, status: 'unauthenticated' });
+      });
+  }
+}, [user,status]);
 
-
-  if (loading) return <HeroSkeleton />;
-  
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
@@ -50,7 +43,7 @@ export default function HomePage() {
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               A modern, secure authentication system built with Next.js,
-              NextAuth, Prisma, and Postgress. Experience seamless login with
+              NextAuth, Prisma, and PostgreSQL. Experience seamless login with
               multiple providers and robust user management.
             </p>
 
@@ -152,8 +145,7 @@ export default function HomePage() {
                 <Zap className="h-12 w-12 text-primary mb-4" />
                 <CardTitle>High Performance</CardTitle>
                 <CardDescription>
-                  Prisma optimization, and Docker containerization for
-                  scalability
+                  Prisma optimization and Docker containerization for scalability
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -180,8 +172,7 @@ export default function HomePage() {
               Ready to Get Started?
             </h2>
             <p className="text-xl text-muted-foreground mb-8">
-              Join thousands of users who trust AuthApp for their authentication
-              needs
+              Join thousands of users who trust AuthWeb for their authentication needs
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/signup">

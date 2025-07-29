@@ -21,14 +21,14 @@ import {
   Trash2,
   AlertTriangle,
   User,
-  ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
-import { authApi, storage } from "@/lib/api";
+import { authApi } from "@/lib/api";
 import type { AxiosError } from "axios";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/use-auth";
 import { AuthSpinner } from "@/components/loaders/AuthSpinner";
+import { useAuthStore } from "@/lib/authStore";
 
 export default function SettingsPage() {
   const { user, loading } = useAuth();
@@ -83,7 +83,7 @@ export default function SettingsPage() {
     setIsLoading(true);
     try {
       await authApi.deleteAccount();
-      storage.clearToken();
+      useAuthStore.getState().clearToken();
       router.push("/");
     } catch (err: unknown) {
       const axiosError = err as AxiosError<{ message?: string }>;
@@ -98,10 +98,6 @@ export default function SettingsPage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <ArrowLeft
-            className="h-5 w-5 cursor-pointer"
-            onClick={() => router.back()}
-          />
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Settings className="h-8 w-8" />
             Account Settings

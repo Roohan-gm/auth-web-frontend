@@ -24,8 +24,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Image from "next/image";
-import { authApi, storage } from "@/lib/api";
+import { authApi } from "@/lib/api";
 import { googleApi } from "@/lib/google-api";
+import axios from "axios";
+import { SignupData } from "@/lib/types";
+import imageCompression from "browser-image-compression";
+import { useAuthStore } from "@/lib/authStore";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -59,7 +63,7 @@ export default function SignupPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -67,33 +71,38 @@ export default function SignupPage() {
     try {
       let profilePictureUrl = "";
       if (profilePictureFile) {
+        const compressed = await imageCompression(profilePictureFile, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1024,
+          useWebWorker: true,
+        });
         const form = new FormData();
-        form.append("file", profilePictureFile);
-        form.append(
-          "upload_preset",
-          process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!
-        );
+        form.append("file", compressed);
 
-        const up = await fetch(
-          `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-          { method: "POST", body: form }
+        const { data } = await axios.post(
+          `${process.env.NEXT_PUBLIC_API_URL}/upload`,
+          form,
+          { headers: { "Content-Type": "multipart/form-data" } }
         );
-
-        if (!up.ok) throw new Error("Upload failed");
-        const upJson = await up.json();
-        profilePictureUrl = upJson.secure_url;
+        profilePictureUrl = data.url;
       }
 
-      const { token } = await authApi.signup({
-        ...formData,
+      const payload: SignupData = {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        gender: formData.gender,
         age: formData.age ? Number(formData.age) : undefined,
         profilePicture: profilePictureUrl,
-      });
+      };
 
-      storage.setToken(token);
-      router.push("/dashboard");
+      const { user, token } = await authApi.signup(payload);
+      useAuthStore.getState().setToken(token);
+      useAuthStore.getState().setUser(user);
+
+      router.push("/login");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Signup failed");
+     setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
       setLoading(false);
     }
@@ -150,6 +159,7 @@ export default function SignupPage() {
                 id="password"
                 name="password"
                 type="password"
+                autoComplete="true"
                 placeholder="Create a strong password"
                 value={formData.password}
                 onChange={handleInputChange}

@@ -31,11 +31,10 @@ export default function UsersPage() {
       const response = await userApi.getAllUsers({
         page: currentPage,
         limit: 12,
-        sort: "createdAt",
         order: "desc",
       });
-      setUsers(response.users ?? []);
-      setPagination((response.pagination as PaginationInfo) ?? null);
+      setUsers(response.data.users ?? []);
+      setPagination((response.data.pagination as PaginationInfo) ?? null);
     } catch (error) {
       console.error("Failed to load users:", error);
       setUsers([]);
@@ -67,8 +66,8 @@ export default function UsersPage() {
         page: 1,
         limit: 12,
       });
-      setUsers(response.users ?? []);
-      setPagination((response.pagination as PaginationInfo) ?? null);
+      setUsers(response.data.users ?? []);
+      setPagination((response.data.pagination as PaginationInfo) ?? null);
       setCurrentPage(1);
     } catch (error) {
       console.error("Search failed:", error);

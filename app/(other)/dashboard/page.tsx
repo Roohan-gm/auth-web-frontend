@@ -10,15 +10,43 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
-import { useAuth } from "@/lib/use-auth";
 import { AuthSpinner } from "@/components/loaders/AuthSpinner";
+import { useAuthStore } from "@/lib/authStore";
+import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
+  const search = useSearchParams();
+  const tokenFromUrl = search.get("token");
+  const userStrFromUrl = search.get("user");
+  const router = useRouter();
 
-  if (loading) return <AuthSpinner />;
+  const { user, status } = useAuthStore();
 
-  if (!user) return null;
+  /* ---------- Google-callback handler ---------- */
+  useEffect(() => {
+    if (tokenFromUrl && userStrFromUrl) {
+      try {
+        const parsedUser = JSON.parse(decodeURIComponent(userStrFromUrl));
+        useAuthStore.getState().setToken(tokenFromUrl);
+        useAuthStore.getState().setUser(parsedUser);
+        window.history.replaceState(null, "", "/dashboard");
+      } catch (e) {
+        console.error("Invalid user JSON", e);
+      }
+    }
+  }, [tokenFromUrl, userStrFromUrl]);
+
+  /* ---------- redirect AFTER hydration ---------- */
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
+
+  /* ---------- loading / empty states ---------- */
+  if (!user || status === "loading") return <AuthSpinner />;
 
   return (
     <div className="container mx-auto py-8">
@@ -26,7 +54,7 @@ export default function DashboardPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back, {user?.name ?? "Guest"}!
+            Welcome back, {user.name ?? "Guest"}!
           </p>
         </div>
 
@@ -40,20 +68,20 @@ export default function DashboardPage() {
               <div className="flex items-center space-x-4">
                 <Avatar className="h-16 w-16">
                   <AvatarImage
-                    src={user?.profilePicture || ""}
+                    src={user.profilePicture || ""}
                     className="object-cover"
                   />
                   <AvatarFallback>
-                    {user?.name?.charAt(0).toUpperCase()}
+                    {user.name?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-semibold">{user?.name}</h3>
-                  <p className="text-sm text-muted-foreground">{user?.email}</p>
+                  <h3 className="font-semibold">{user.name}</h3>
+                  <p className="text-sm text-muted-foreground">{user.email}</p>
                 </div>
               </div>
               <Button asChild>
-                <Link href={`/user/${user?.id}`}>View Profile</Link>
+                <Link href={`/user/${user.id}`}>View Profile</Link>
               </Button>
             </CardContent>
           </Card>
@@ -69,7 +97,7 @@ export default function DashboardPage() {
                 variant="outline"
                 className="w-full justify-start bg-transparent"
               >
-                <Link href={`/user/${user?.id}/edit`}>Edit Profile</Link>
+                <Link href={`/user/${user.id}/edit`}>Edit Profile</Link>
               </Button>
               <Button
                 asChild

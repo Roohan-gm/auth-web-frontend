@@ -17,8 +17,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
-import { authApi, storage } from "@/lib/api";
+import { authApi } from "@/lib/api";
 import { googleApi } from "@/lib/google-api";
+import { useAuthStore } from "@/lib/authStore";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -33,8 +34,9 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const { token } = await authApi.login({ email, password });
-      storage.setToken(token);
+      const { token,user } = await authApi.login({ email, password });
+      useAuthStore.getState().setToken(token);
+      useAuthStore.getState().setUser(user);
       router.push("/dashboard");
     } catch {
       setError("An error occurred. Please try again.");

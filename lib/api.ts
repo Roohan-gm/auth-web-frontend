@@ -1,24 +1,19 @@
-import axios, { AxiosResponse, type AxiosError } from "axios";
-import { LoginData, SignupData, User } from "./types";
+// lib/api.ts
+import axios, { AxiosError } from 'axios';
+import { CleanParams, LoginData, SignupData, User } from './types';
+import { useAuthStore } from './authStore';
 
-/* ---------- axios instance ---------- */
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });
 
-/* ---------- token helpers ---------- */
-export const TOKEN_KEY = "jwt";
-export const storage = {
-  setToken: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  getToken: () => localStorage.getItem(TOKEN_KEY),
-  clearToken: () => localStorage.removeItem(TOKEN_KEY),
-};
+const isBrowser = typeof window !== 'undefined';
 
-/* ---------- request / response interceptors ---------- */
+export const TOKEN_KEY = 'jwt';
+
 api.interceptors.request.use((config) => {
-  const token = storage.getToken();
+  const token = useAuthStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -26,53 +21,53 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      storage.clearToken();
-      window.location.href = "/login";
+    if (error.response?.status === 401 && isBrowser) {
+      useAuthStore.getState().clearToken();
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
 
-/* ---------- auth API ---------- */
 export const authApi = {
   signup: (userData: SignupData) =>
-    api.post<{ user: User; token: string }>("/api/auth/signup", userData).then((r) => r.data),
-
+    api.post<{ user: User; token: string }>('/signup', userData).then((r) => r.data),
   login: (credentials: LoginData) =>
-    api.post<{ user: User; token: string }>("/api/auth/login", credentials).then((r) => r.data),
-
+    api.post<{ user: User; token: string }>('/login', credentials).then((r) => r.data),
   google: (googleCode: string) =>
-    api.post<{ user: User; token: string }>("/api/auth/google", { token: googleCode }).then((r) => r.data),
-
-  logout: () => api.post("/api/auth/logout").then((r) => r.data),
-
+    api.post<{ user: User; token: string }>('/google', { token: googleCode }).then((r) => r.data),
+  logout: () => api.post('/logout').then((r) => r.data),
   changePassword: (payload: { currentPassword: string; newPassword: string }) =>
-    api.put("/api/auth/change-password", payload).then((r) => r.data),
-
-  deleteAccount: () => api.delete("/api/auth/account").then((r) => r.data),
+    api.put<{ message: string }>('/update-password', payload).then((r) => r.data),
+  deleteAccount: () => api.delete<{ message: string }>('/delete').then((r) => r.data),
 };
 
-/* ---------- user API ---------- */
 export const userApi = {
-  getProfile: (id: string) => api.get<AxiosResponse>(`/api/user/${id}`).then((r) => r.data),
+  getAllUsers: (params?: Record<string, unknown>) => {
+    const cleaned: CleanParams = {};
+    const allowed = ['id', 'name', 'email', 'createdAt', 'updatedAt'];
 
-  updateProfile: (id: string, data: Partial<User>) =>
-    api.put<User>(`/api/user/${id}`, data).then((r) => r.data),
+    if (params?.page != null) cleaned.page = Number(params.page);
+    if (params?.limit != null) cleaned.limit = Number(params.limit);
+    if (params?.order != null) cleaned.order = String(params.order);
+    const sort = String(params?.sort || '').toLowerCase();
+    if (allowed.includes(sort)) cleaned.sort = sort;
 
-  getAllUsers: (params?: Record<string, unknown>) =>
-    api.get<{ users: User[]; pagination: unknown }>("/api/user", { params }).then((r) => r.data),
-
+    return api.get<{ users: User[]; pagination: unknown }>('/users', { params: cleaned });
+  },
   searchUsers: (searchTerm: string, params?: Record<string, unknown>) =>
-    api.get<{ users: User[]; pagination: unknown }>("/api/user/search", {
+    api.get<{ users: User[]; pagination: unknown }>('/users/search', {
       params: { q: searchTerm, ...params },
-    }).then((r) => r.data),
+    }),
+  getProfile: (id: string) => api.get<User>(`/users/${id}`),
+  updateProfile: (id: string, data: Partial<User>) =>
+    api.put<User>(`/users/${id}`, data),
 };
 
 export const getMe = async (): Promise<User | null> => {
-  const token = storage.getToken();
+  const token = useAuthStore.getState().token;
   if (!token) return null;
-  const res = await api.get<User>("/api/auth/me");
+  const res = await api.get<User>('/me');
   return res.data;
 };
 

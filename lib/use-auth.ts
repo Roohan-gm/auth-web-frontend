@@ -1,27 +1,32 @@
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { getMe, storage } from "@/lib/api";
-import type { UserData } from "@/lib/types";
+// lib/use-auth.ts
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/authStore';
+import { getMe } from '@/lib/api';
 
 export function useAuth() {
-  const [user, setUser] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const token   = useAuthStore((s) => s.token);
+  const user    = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const clear   = useAuthStore((s) => s.clearToken);
+  const router  = useRouter();
+  const [loading, setLoading] = useState(!!token); // true only if we have to fetch
 
   useEffect(() => {
-    const token = storage.getToken();
     if (!token) {
       setLoading(false);
       return;
     }
+
+    setLoading(true);
     getMe()
       .then(setUser)
       .catch(() => {
-        storage.clearToken();
-        router.push("/login");
+        clear();
+        router.push('/login');
       })
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [token, setUser, clear, router]);
 
-  return { user, loading };
+  return { user, token, loading };
 }
